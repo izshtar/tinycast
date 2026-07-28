@@ -25,9 +25,11 @@ final class ClipboardManager {
         self.settings = settings
     }
 
-    // Isolated so teardown can touch the main-actor timer; AppCore only releases the manager on the main actor, so no hop. The poll block is `[weak self]`, so this isn't fixing a leak — it stops a stray timer firing if the manager is ever recreated.
-    isolated deinit {
-        timer?.invalidate()
+    // AppCore only releases the manager on the main actor; invalidate there so a recreated manager can't inherit a stray timer tick.
+    deinit {
+        MainActor.assumeIsolated {
+            timer?.invalidate()
+        }
     }
 
     func start() {

@@ -129,6 +129,7 @@ the `ScrollView`, **before `.thinScrollbar()`** (so the scrollbar overlay stays 
 All lists share one row grammar so launcher and clipboard look identical:
 
 - `HStack(spacing: lg)`: leading 24pt icon/thumbnail, title (`.body`, `lineLimit(1)`), optional trailing keycaps/kind label, `Spacer`. Insets: `.horizontal md`, `.vertical sm`.
+- Launcher rows for `AppEntry.Kind.application` are the one deliberate exception: their icon slot is 48pt, while the rest of the palette keeps the shared 24pt row grammar.
 - Background is a `RoundedRectangle(row, .continuous)` filled by `fill`: **selection → hover → clear**, in that precedence. This `fill` computed property is copy-identical across `AppRow`, `ClipboardRow`, `CalculatorCard` — keep them in sync.
 - **Hover state lives on the row**, not the list, so a mouse sweep repaints only the rows entering/leaving (a list-level hover rebuilds every row per move — don't do that).
 - **Scroll follows selection only on keyboard nav/reset**, driven by a `scrollToken` UUID — mouse selection targets a visible row and never yanks scroll.

@@ -216,7 +216,7 @@ private struct ClipboardRow: View {
     private var thumbnail: some View {
         switch item.kind {
         case .text:
-            glyphTile("doc.text")
+                glyphTile("doc.text")
         case .image:
             AsyncThumbnail(url: imageURL, maxPixel: 64) { image in
                 image
@@ -272,8 +272,13 @@ private struct AsyncThumbnail<Content: View, Placeholder: View>: View {
                 return
             }
             image = nil  // show the placeholder while a new image decodes
-            image = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
+            await loadImage(url)
         }
+    }
+
+    @MainActor
+    private func loadImage(_ url: URL) async {
+        image = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
     }
 }
 

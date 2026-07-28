@@ -80,8 +80,8 @@ struct PopoverMenu: View {
         .padding(Theme.Spacing.sm)
         .frame(width: Theme.Size.menuWidth)
         // Tahoe glass carries its own elevation/shadow; a hand-tuned drop shadow on top reads heavy and non-native, so we let the glass own it.
-        .glassEffect(
-            .regular, in: RoundedRectangle(cornerRadius: Theme.Radius.menuPanel, style: .continuous)
+        .frostedMenu(
+            in: RoundedRectangle(cornerRadius: Theme.Radius.menuPanel, style: .continuous)
         )
     }
 }
@@ -156,7 +156,12 @@ private struct MenuFileIcon: View {
         .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
         .task(id: path) {
             guard image == nil else { return }
-            image = await IconCache.loadAsync(forFile: path)
+            await loadImage()
         }
+    }
+
+    @MainActor
+    private func loadImage() async {
+        image = await IconCache.loadAsync(forFile: path)
     }
 }

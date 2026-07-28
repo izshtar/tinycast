@@ -12,7 +12,7 @@ on:
         description: "Release channel"
         type: choice
         options: [beta, stable]
-        default: beta
+        default: stable
       version:
         description: "Base version, e.g. 0.2.0 (no channel suffix)"
         type: string
@@ -23,15 +23,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
 
-      - name: Select Xcode 26
+      - name: Select Xcode 16
         run: |
-          XCODE_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n1)"
+          XCODE_PATH="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n1)"
           if [ -z "$XCODE_PATH" ]; then
-            echo "::error::No Xcode 26.x found on this runner. Installed Xcodes:"
+            echo "::error::No Xcode 16.x found on this runner. Installed Xcodes:"
             ls /Applications | grep -i xcode || true
             exit 1
           fi
@@ -59,28 +59,7 @@ jobs:
             echo "prerelease=${PRERELEASE}"
           } >> "$GITHUB_OUTPUT"
 
-      # Import the stable self-signed identity into a temp keychain so every release is signed with
-      # the SAME cert — that constant signature is what keeps users' Accessibility (TCC) grant alive
-      # across updates. Generate/rotate the secrets per docs/signing.md.
-      - name: Import signing certificate
-        env:
-          P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
-          P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
-        run: |
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          KPW="$(openssl rand -base64 24)"
-          echo "${P12_BASE64}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security create-keychain -p "$KPW" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KPW" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "${P12_PASSWORD}" -A -T /usr/bin/codesign
-          # Let codesign use the key without an interactive prompt.
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KPW" "$KEYCHAIN" >/dev/null
-          # Prepend to the search list so xcodebuild's codesign finds "Tinycast Self-Signed".
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$RUNNER_TEMP/cert.p12"
-
-      # Build the signed .app into an ephemeral DerivedData dir. Channel identity (name, bundle id,
+      # Build an unsigned .app into an ephemeral DerivedData dir. Channel identity (name, bundle id,
       # version) comes from build-setting overrides so beta/stable ship side-by-side.
       - name: Build app
         env:
@@ -91,8 +70,7 @@ jobs:
         run: |
           xcodebuild -project Tinycast.xcodeproj -scheme Tinycast -configuration Release \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Tinycast Self-Signed" \
-            OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
+            CODE_SIGNING_ALLOWED=NO \
             PRODUCT_NAME="$DISPLAY_NAME" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             build
@@ -107,112 +85,9 @@ jobs:
           cp -R "$RUNNER_TEMP/DerivedData/Build/Products/Release/${DISPLAY_NAME}.app" "$STAGE/"
           ln -s /Applications "$STAGE/Applications"
           mkdir -p dist
-          diskutil image create from "$STAGE" --format UDZO --volumeName "$DISPLAY_NAME" "dist/${DMG_FILE}"
+          hdiutil create -srcfolder "$STAGE" -format UDZO -volname "$DISPLAY_NAME" "dist/${DMG_FILE}"
 
       - uses: actions/upload-artifact@v7
         with:
           name: Tinycast-${{ steps.meta.outputs.full_version }}
           path: dist/${{ steps.meta.outputs.dmg_file }}
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v${{ steps.meta.outputs.full_version }}"
-          PRERELEASE_FLAG=""
-          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
-          fi
-          gh release create "$TAG" \
-            "dist/${{ steps.meta.outputs.dmg_file }}" \
-            --title "${{ steps.meta.outputs.display_name }} ${{ steps.meta.outputs.full_version }}" \
-            --notes "**Channel:** ${{ github.event.inputs.channel }}
-          **Version:** ${{ steps.meta.outputs.full_version }}
-          **Bundle ID:** \`${{ steps.meta.outputs.bundle_id }}\`
-          Built from ${{ github.sha }}.
-
-          **Recommended:** install via Homebrew — it clears the quarantine flag automatically on every install and update, so there's nothing to run by hand:
-          \`\`\`sh
-          brew trust --tap abue-ammar/tinycast
-          brew install --cask abue-ammar/tinycast/${{ steps.meta.outputs.cask_name }}
-          \`\`\`
-          This build is self-signed. If you download the DMG directly instead of using Homebrew, macOS will refuse to open it until you clear the quarantine flag once:
-          \`\`\`sh
-          xattr -dr com.apple.quarantine \"/Applications/${{ steps.meta.outputs.display_name }}.app\"
-          \`\`\`" \
-            $PRERELEASE_FLAG
-
-      - name: Update Homebrew cask
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          CASK: ${{ steps.meta.outputs.cask_name }}
-          VERSION: ${{ steps.meta.outputs.full_version }}
-          DMG_FILE: ${{ steps.meta.outputs.dmg_file }}
-        run: |
-          if [ -z "${TAP_TOKEN}" ]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN secret not set — skipping cask bump. Add it to enable auto-updates of the tap."
-            exit 0
-          fi
-          SHA="$(shasum -a 256 "dist/${DMG_FILE}" | awk '{print $1}')"
-          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/abue-ammar/homebrew-tinycast.git" tap
-          CASK_FILE="tap/Casks/${CASK}.rb"
-          if [ ! -f "$CASK_FILE" ]; then
-            echo "::error::$CASK_FILE not found in tap."
-            exit 1
-          fi
-          sed -i '' -E "s|^  version \".*\"|  version \"${VERSION}\"|" "$CASK_FILE"
-          sed -i '' -E "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" "$CASK_FILE"
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "Casks/${CASK}.rb"
-          if git diff --cached --quiet; then
-            echo "No cask changes to commit."
-          else
-            git commit -m "${CASK} ${VERSION}"
-            git push
-          fi
-
-      # Announce the release in the Discord release channel. A Components V2 (flags 32768) card:
-      # channel-tinted container, title + right-aligned Download button, Homebrew install block.
-      # No-ops with a warning if the webhook secret isn't set.
-      - name: Announce on Discord
-        if: success()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          CHANNEL: ${{ github.event.inputs.channel }}
-          DISPLAY_NAME: ${{ steps.meta.outputs.display_name }}
-          VERSION: ${{ steps.meta.outputs.full_version }}
-          CASK: ${{ steps.meta.outputs.cask_name }}
-          TAG: v${{ steps.meta.outputs.full_version }}
-        run: |
-          if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
-            echo "::warning::DISCORD_WEBHOOK_URL secret not set — skipping Discord announcement."
-            exit 0
-          fi
-          if [ "${CHANNEL}" = "stable" ]; then COLOR=3066993; else COLOR=15844367; fi
-          RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          INSTALL="brew install --cask abue-ammar/tinycast/${CASK}"
-          # Build with jq so backticks stay literal (printf in single quotes escaped them,
-          # which Discord rendered as verbatim backticks instead of a code block).
-          jq -n \
-            --argjson color "${COLOR}" \
-            --arg heading "## 🚀 ${DISPLAY_NAME} ${VERSION}" \
-            --arg sub "Now available on the **${CHANNEL}** channel." \
-            --arg install "${INSTALL}" \
-            --arg url "${RELEASE_URL}" \
-            '{
-              flags: 32768,
-              components: [
-                { type: 17, accent_color: $color, components: [
-                  { type: 9,
-                    components: [ { type: 10, content: ($heading + "\n" + $sub) } ],
-                    accessory: { type: 2, style: 5, label: "Download", url: $url }
-                  },
-                  { type: 14 },
-                  { type: 10, content: ("**Install / update via Homebrew**\n```\n" + $install + "\n```") }
-                ] }
-              ]
-            }' > payload.json
-          curl -fsS -X POST -H "Content-Type: application/json" -d @payload.json \
-            "${DISCORD_WEBHOOK_URL}?with_components=true"

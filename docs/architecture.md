@@ -43,6 +43,6 @@ House idioms for the sharp edges:
 
 - Block-observer lifetimes go through the RAII `NotificationToken` (`Core/NotificationToken.swift`)
   instead of removal in a `deinit`.
-- `ClipboardStore` uses `isolated deinit` for its SQLite teardown.
+- `ClipboardStore` uses `MainActor.assumeIsolated` in `deinit` so its SQLite teardown stays on the main actor.
 - Raw Carbon / C pointers get decoded to plain values before crossing into actor code (see
   `hotKeyCarbonEventHandler`).

@@ -151,9 +151,11 @@ final class ClipboardStore: ObservableObject {
         }
     }
 
-    // Isolated so teardown may touch the main-actor statement/db pointers; AppCore only ever releases the store on the main actor, so no hop.
-    isolated deinit {
-        closeDatabase()
+    // AppCore only releases the store on the main actor; close there so SQLite teardown stays on the same owner.
+    deinit {
+        MainActor.assumeIsolated {
+            closeDatabase()
+        }
     }
 
     func load() {

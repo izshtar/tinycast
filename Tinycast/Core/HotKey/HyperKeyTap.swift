@@ -133,9 +133,11 @@ final class HyperKeyTap: ObservableObject {
     private let clock = ContinuousClock()
     private static let quickPressWindow: Duration = .milliseconds(250)
 
-    // Isolated so teardown can release the main-actor IOKit connection; the tap is an AppCore-owned singleton released on main. The kernel reclaims this at process exit anyway, so this only matters if it's ever recreated.
-    isolated deinit {
-        if hidConnect != IO_OBJECT_NULL { IOServiceClose(hidConnect) }
+    // The tap is AppCore-owned and released on the main actor; close the IOKit handle there if it's ever recreated.
+    deinit {
+        MainActor.assumeIsolated {
+            if hidConnect != IO_OBJECT_NULL { IOServiceClose(hidConnect) }
+        }
     }
 
     func start(settings: AppSettings) {

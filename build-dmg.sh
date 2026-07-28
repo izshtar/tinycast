@@ -28,7 +28,7 @@ STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
-diskutil image create from "$STAGE" --format UDZO --volumeName "Tinycast" "$DMG" >/dev/null
+hdiutil create -srcfolder "$STAGE" -format UDZO -volname "Tinycast" "$DMG" >/dev/null
 rm -rf "$STAGE"
 
 echo "✓ $DMG"

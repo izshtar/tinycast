@@ -5,10 +5,9 @@ Apple Developer ID (there's no paid Apple account), but keeping the *same* ident
 what makes macOS remember the Accessibility permission across rebuilds and updates — ad-hoc signing
 changes every build and macOS forgets the grant.
 
-You create this identity **once**. The same identity is used for:
+You create this identity **once**. It is used for:
 
-- **local dev builds** — so Accessibility persists while you develop (the Xcode project signs with it), and
-- **CI releases** — exported into two GitHub secrets the release workflow imports.
+- **local dev builds** — so Accessibility persists while you develop (the Xcode project signs with it).
 
 ## 1. Create the `Tinycast Self-Signed` identity (once)
 
@@ -42,37 +41,6 @@ security find-identity -p codesigning | grep "Tinycast Self-Signed"
 ```
 
 Now local builds (Xcode, VS Code F5, `xcodebuild`) sign with it, and you grant Accessibility once.
-
-## 2. Generate the CI secrets
-
-The release workflow needs the same identity as two repo secrets. Export it, base64-encode it, and
-pick a password:
-
-```sh
-# Pick a random password for the exported bundle.
-P12_PASSWORD="$(openssl rand -base64 24)"; echo "password: $P12_PASSWORD"
-
-# Export the identity (approve the keychain dialog if asked) and base64-encode it.
-security export -t identities -f pkcs12 \
-  -k ~/Library/Keychains/login.keychain-db \
-  -P "$P12_PASSWORD" -o /tmp/signing.p12
-base64 -i /tmp/signing.p12 | tr -d '\n' > /tmp/signing.p12.base64
-rm -f /tmp/signing.p12
-```
-
-Then set the two secrets on the repo (via `gh`, authed as the repo owner, or paste them in the GitHub
-UI under **Settings → Secrets and variables → Actions**):
-
-```sh
-gh secret set SIGNING_P12_BASE64   --repo abue-ammar/tinycast < /tmp/signing.p12.base64
-gh secret set SIGNING_P12_PASSWORD --repo abue-ammar/tinycast --body "$P12_PASSWORD"
-rm -f /tmp/signing.p12.base64   # holds your private key — delete it
-```
-
-If you ever lose the secrets, just re-run this section — as long as the `Tinycast Self-Signed`
-identity is still in your keychain, the exported identity is the same, so users are unaffected. If you
-lose the identity entirely, recreate it (step 1) and re-do this; existing users will re-grant
-Accessibility once on their next update, then it's stable again.
 
 ## Quarantine (separate from signing)
 

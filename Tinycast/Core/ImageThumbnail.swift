@@ -6,6 +6,9 @@ enum ImageThumbnail {
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
     private final class ImageCache: NSCache<NSString, NSImage>, @unchecked Sendable {}
 
+    /// A freshly-decoded, thereafter-immutable `NSImage` is safe to move across the actor boundary.
+    private struct Decoded: @unchecked Sendable { let image: NSImage? }
+
     /// Small row thumbnails (≤ `rowThreshold` px), byte-bounded and kept warm across palette dismissals so re-opening draws instantly.
     private static let rowCache: ImageCache = {
         let cache = ImageCache()
@@ -41,13 +44,13 @@ enum ImageThumbnail {
         pick(maxPixel).object(forKey: cacheKey(url, maxPixel))
     }
 
-    /// Decodes off the main thread and reads the result back from the thread-safe cache; the `NSImage` never crosses the actor boundary, keeping it clean under strict concurrency.
+    /// Decodes off the main thread and returns the decoded image back on the main actor.
+    @MainActor
     static func loadAsync(_ url: URL, maxPixel: CGFloat) async -> NSImage? {
         if let cached = cached(url, maxPixel: maxPixel) { return cached }
-        await Task.detached(priority: .userInitiated) {
-            _ = load(url, maxPixel: maxPixel)
-        }.value
-        return cached(url, maxPixel: maxPixel)
+        return await Task.detached(priority: .userInitiated) { () -> Decoded in
+            Decoded(image: load(url, maxPixel: maxPixel))
+        }.value.image
     }
 
     /// A thumbnail no larger than `maxPixel` on its longest edge, cached per (path, size); decodes synchronously, so call off the main thread for anything user-facing.

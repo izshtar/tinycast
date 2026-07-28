@@ -1,24 +1,30 @@
 import AppKit
 import SwiftUI
 
+struct ScrollMetrics: Equatable {
+    var offset: CGFloat = 0
+    var insetTop: CGFloat = 0
+    var insetBottom: CGFloat = 0
+    var contentHeight: CGFloat = 0
+    var viewportHeight: CGFloat = 0
+
+    var visibleHeight: CGFloat { max(0, viewportHeight - insetTop - insetBottom) }
+    var topDistance: CGFloat { max(0, offset + insetTop) }
+    var bottomDistance: CGFloat {
+        max(0, contentHeight + insetBottom - viewportHeight - offset)
+    }
+    var scrollable: Bool { contentHeight > visibleHeight + 1 }
+}
+
 /// A thin auto-hiding SwiftUI overlay scrollbar (hairline thumb while scrolling plus a hover-reveal rail), with all pointer handling isolated in the AppKit `ScrollbarInteraction` view to sidestep SwiftUI/AppKit event-routing gaps.
 struct ThinScrollbar: ViewModifier {
-    private struct Metrics: Equatable {
-        /// Raw `contentOffset.y`; with `safeAreaInset` bars it rests at `-insetTop`, so normalize by `insetTop` before mapping to a track fraction.
-        var offset: CGFloat = 0
-        var insetTop: CGFloat = 0
-        var content: CGFloat = 0
-        var viewport: CGFloat = 0
-        var scrollable: Bool { content > viewport + 1 }
-    }
-
     // Interaction signals — kept separate so each source of "show the bar" is independent.
     @State private var isScrolling = false
     @State private var isHoveringTrack = false
     /// Mirrors the AppKit-side thumb drag (`ScrollbarInteraction` owns the actual drag state).
     @State private var isDragging = false
 
-    @State private var metrics = Metrics()
+    @State private var metrics = ScrollMetrics()
     /// Instantaneous "pointer is in the trailing hover zone" mirror, for edge-transition detection.
     @State private var inZone = false
     @State private var scrollStop: Task<Void, Never>?
@@ -41,21 +47,12 @@ struct ThinScrollbar: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollIndicators(.hidden)  // drop the native scroller (and its flash) entirely
-            // Geometry drives the thumb's size/position, never its visibility.
-            .onScrollGeometryChange(for: Metrics.self) { geo in
-                Metrics(
-                    offset: geo.contentOffset.y,
-                    insetTop: geo.contentInsets.top,
-                    content: geo.contentSize.height,
-                    viewport: geo.containerSize.height
-                )
-            } action: { _, new in
+            .observeScrollMetrics { new in
+                let moved = new.offset != metrics.offset
                 metrics = new
-            }
-            // Scrolling reveals the thumb (not the rail) and re-hides a beat after it stops; a thumb drag has no scroll phase, so its own handlers own visibility.
-            .onScrollPhaseChange { _, phase in
-                guard !isDragging else { return }
-                phase == .idle ? scheduleScrollStop() : beganScrolling()
+                guard moved, !isDragging else { return }
+                beganScrolling()
+                scheduleScrollStop()
             }
             .overlay(alignment: .topTrailing) { bar }
             // One tracking view over the whole trailing strip owns all pointer handling: transparent except over the thumb, where it takes the drag and forwards wheel events, and never flickers the rail the way a content-level hover did.
@@ -99,15 +96,15 @@ struct ThinScrollbar: ViewModifier {
     }
 
     /// Usable vertical travel, inset a little from the top and bottom edges.
-    private var track: CGFloat { max(0, metrics.viewport - inset * 2) }
+        private var track: CGFloat { max(0, metrics.viewportHeight - inset * 2) }
 
     private var thumbHeight: CGFloat {
-        guard metrics.content > 0 else { return minThumb }
-        return min(track, max(minThumb, track * metrics.viewport / metrics.content))
+        guard metrics.contentHeight > 0 else { return minThumb }
+        return min(track, max(minThumb, track * metrics.viewportHeight / metrics.contentHeight))
     }
 
     private var thumbOffset: CGFloat {
-        let maxScroll = max(0, metrics.content - metrics.viewport)
+        let maxScroll = max(0, metrics.contentHeight - metrics.viewportHeight)
         guard maxScroll > 0 else { return inset }
         let fraction = min(1, max(0, (metrics.offset + metrics.insetTop) / maxScroll))
         return inset + fraction * (track - thumbHeight)
@@ -174,9 +171,138 @@ extension View {
         modifier(ThinScrollbar())
     }
 
+    /// Reads the backing `NSScrollView` metrics on every live scroll/layout change so SwiftUI can drive effects on macOS versions that lack `onScrollGeometryChange`.
+    func observeScrollMetrics(_ action: @escaping @MainActor (ScrollMetrics) -> Void) -> some View {
+        background(ScrollMetricsReader(onChange: action).frame(width: 0, height: 0))
+    }
+
     /// Attach *inside* a `ScrollView` (on its content) to remove the native scrollers so only our `thinScrollbar` shows.
     func hideNativeScrollers() -> some View {
         background(NativeScrollerHider().frame(width: 0, height: 0))
+    }
+}
+
+private struct ScrollMetricsReader: NSViewRepresentable {
+    let onChange: @MainActor (ScrollMetrics) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        ProbeView(onChange: onChange)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let probe = nsView as? ProbeView else { return }
+        probe.onChange = onChange
+        probe.attachIfNeeded()
+        probe.publishMetrics()
+    }
+
+    private final class ProbeView: NSView {
+        var onChange: @MainActor (ScrollMetrics) -> Void
+
+        private weak var scrollView: NSScrollView?
+        private var boundsObserver: NotificationToken?
+        private var frameObserver: NotificationToken?
+        private var documentFrameObserver: NotificationToken?
+        private var retriesLeft = 12
+        private var lastMetrics = ScrollMetrics()
+
+        init(onChange: @escaping @MainActor (ScrollMetrics) -> Void) {
+            self.onChange = onChange
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil {
+                detach()
+                return
+            }
+            retriesLeft = 12
+            attachIfNeeded()
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            retriesLeft = 12
+            attachIfNeeded()
+        }
+
+        func attachIfNeeded() {
+            guard let scroll = enclosingScrollView else {
+                guard retriesLeft > 0 else { return }
+                retriesLeft -= 1
+                DispatchQueue.main.async { [weak self] in self?.attachIfNeeded() }
+                return
+            }
+            guard scroll !== scrollView else {
+                publishMetrics()
+                return
+            }
+
+            detach()
+            scrollView = scroll
+            scroll.contentView.postsBoundsChangedNotifications = true
+            scroll.contentView.postsFrameChangedNotifications = true
+            scroll.documentView?.postsFrameChangedNotifications = true
+
+            let center = NotificationCenter.default
+            boundsObserver = NotificationToken(
+                center.addObserver(
+                    forName: NSView.boundsDidChangeNotification,
+                    object: scroll.contentView,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.publishMetrics() }
+                },
+                center: center
+            )
+            frameObserver = NotificationToken(
+                center.addObserver(
+                    forName: NSView.frameDidChangeNotification,
+                    object: scroll.contentView,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.publishMetrics() }
+                },
+                center: center
+            )
+            documentFrameObserver = NotificationToken(
+                center.addObserver(
+                    forName: NSView.frameDidChangeNotification,
+                    object: scroll.documentView,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.publishMetrics() }
+                },
+                center: center
+            )
+            publishMetrics()
+        }
+
+        func publishMetrics() {
+            guard let scroll = scrollView else { return }
+            let clip = scroll.contentView
+            let metrics = ScrollMetrics(
+                offset: clip.bounds.origin.y,
+                insetTop: scroll.contentInsets.top,
+                insetBottom: scroll.contentInsets.bottom,
+                contentHeight: clip.documentRect.height,
+                viewportHeight: clip.bounds.height
+            )
+            guard metrics != lastMetrics else { return }
+            lastMetrics = metrics
+            onChange(metrics)
+        }
+
+        private func detach() {
+            boundsObserver = nil
+            frameObserver = nil
+            documentFrameObserver = nil
+            scrollView = nil
+        }
     }
 }
 

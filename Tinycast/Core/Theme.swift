@@ -46,6 +46,8 @@ enum Theme {
         static let compactHeight: CGFloat = headerHeight + headerPadding * 2
         static let bottomBarHeight: CGFloat = 52
         static let rowIcon: CGFloat = 24
+        /// Launcher application rows use a larger icon slot than the shared palette-row baseline.
+        static let launcherApplicationIcon: CGFloat = 48
         static let keyCap: CGFloat = 18
         /// Settings shortcut-recorder keycap — smaller than the palette's `keyCap` chip.
         static let recorderKeyCap: CGFloat = 16
@@ -134,9 +136,33 @@ struct KeyCapChip: View {
 }
 
 extension View {
-    /// A floating Liquid Glass control surface (action group + menu button), interactive for native lensing with a whitish frost tint so it reads brighter than clear glass.
+    /// A floating frosted control surface (action group + menu button).
     func frosted(in shape: some Shape) -> some View {
-        glassEffect(.regular.interactive().tint(Theme.Colors.glassFrost), in: shape)
-            .tint(.clear)
+        modifier(FrostedSurface(shape: shape, interactive: true))
+    }
+
+    /// A frosted menu surface.
+    func frostedMenu(in shape: some Shape) -> some View {
+        modifier(FrostedSurface(shape: shape, interactive: false))
+    }
+}
+
+private struct FrostedSurface<S: Shape>: ViewModifier {
+    let shape: S
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    shape.fill(.clear)
+                    VisualEffectView(material: interactive ? .hudWindow : .popover)
+                        .clipShape(shape)
+                    shape.fill(Theme.Colors.glassFrost)
+                }
+            }
+            .overlay {
+                shape.stroke(Theme.Colors.border.opacity(0.55), lineWidth: 1)
+            }
     }
 }

@@ -9,33 +9,11 @@ struct EdgeDissolveMask: ViewModifier {
     private static let bottomMinAlpha: CGFloat = 0.25
 
     /// How much content is hidden beyond each edge, 0 when the list rests against it.
-    @State private var topDistance: CGFloat = 0
-    @State private var bottomDistance: CGFloat = 0
-    @State private var canScroll = false
-
-    private struct ScrollState: Equatable {
-        var top: CGFloat
-        var bottom: CGFloat
-        var canScroll: Bool
-    }
+    @State private var metrics = ScrollMetrics()
 
     func body(content: Content) -> some View {
         content
-            .onScrollGeometryChange(for: ScrollState.self) { geo in
-                let visible =
-                    geo.containerSize.height - geo.contentInsets.top
-                    - geo.contentInsets.bottom
-                return ScrollState(
-                    top: geo.contentOffset.y + geo.contentInsets.top,
-                    bottom: geo.contentSize.height + geo.contentInsets.bottom
-                        - geo.containerSize.height - geo.contentOffset.y,
-                    canScroll: geo.contentSize.height > visible
-                )
-            } action: { _, new in
-                topDistance = max(0, new.top)
-                bottomDistance = max(0, new.bottom)
-                canScroll = new.canScroll
-            }
+            .observeScrollMetrics { metrics = $0 }
             .mask(
                 // Must span the scroll view's *full* frame — the bars' safe-area insets would otherwise shift the gradient inward, clipping the underlap regions to black.
                 GeometryReader { geo in
@@ -49,10 +27,11 @@ struct EdgeDissolveMask: ViewModifier {
     }
 
     private func stops(height: CGFloat) -> [Gradient.Stop] {
-        guard canScroll, height > 0 else { return [.init(color: .black, location: 0)] }
+        guard metrics.scrollable, height > 0 else { return [.init(color: .black, location: 0)] }
         // Midpoint alpha eases from 1 toward the floor as a full band of content scrolls past (Raycast: opacity = 1 − (1 − min) · clamp(scrollDistance / fadeHeight, 0, 1)).
-        let topAlpha = 1 - (1 - Self.topMinAlpha) * min(topDistance / topFade, 1)
-        let bottomAlpha = 1 - (1 - Self.bottomMinAlpha) * min(bottomDistance / bottomFade, 1)
+        let topAlpha = 1 - (1 - Self.topMinAlpha) * min(metrics.topDistance / topFade, 1)
+        let bottomAlpha =
+            1 - (1 - Self.bottomMinAlpha) * min(metrics.bottomDistance / bottomFade, 1)
         return [
             .init(color: .black.opacity(0), location: 0),
             .init(color: .black.opacity(topAlpha), location: topFade / 2 / height),

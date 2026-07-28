@@ -148,10 +148,14 @@ private struct AppRow: View {
         return shortcut.keycaps
     }
 
+    private var iconSlot: CGFloat {
+        app.kind == .application ? Theme.Size.launcherApplicationIcon : Theme.Size.rowIcon
+    }
+
     var body: some View {
         HStack(spacing: Theme.Spacing.lg) {
             AppIconView(app: app)
-                .frame(width: Theme.Size.rowIcon, height: Theme.Size.rowIcon)
+                .frame(width: iconSlot, height: iconSlot)
                 .overlay(alignment: .bottom) {
                     if running {
                         Circle()
@@ -209,11 +213,16 @@ struct AppIconView: View {
         }
         .task(id: app.id) {
             guard image == nil else { return }
-            image =
-                app.isSymbolIcon
-                ? await IconCache.loadSymbolAsync(named: app.symbolIconName)
-                : await IconCache.loadAsync(forFile: app.url.path)
+            await loadImage()
         }
+    }
+
+    @MainActor
+    private func loadImage() async {
+        image =
+            app.isSymbolIcon
+            ? await IconCache.loadSymbolAsync(named: app.symbolIconName)
+            : await IconCache.loadAsync(forFile: app.url.path)
     }
 }
 

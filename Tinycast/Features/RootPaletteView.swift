@@ -185,237 +185,299 @@ struct RootPaletteView: View {
         let showActionGroup = count > 0 && !(calcSelected && !calcActionable)
 
         // The `header` (and its single search field) is always attached in the same position via safeAreaInset so its focus survives the compact↔expanded swap — only the results below it toggle. Collapsed shows the bar alone; expanded floats header + action bar over the list with edge-dissolve (see docs/ui.md).
-        return Group {
-            if isCollapsed {
-                Color.clear
-            } else {
-                content(
-                    apps: apps, clips: clips, hist: hist, emojiSections: emojiSections, calc: calc,
-                    selection: sel, favoriteCount: favoriteCount, showSections: showSections
-                )
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) { header }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !isCollapsed {
-                bottomBar(pillLabel: pillLabel, showActionGroup: showActionGroup)
-            }
-        }
-        // Menus are in-window overlays anchored to a bottom corner, so they stay clipped inside the panel — never a system popover spilling outside the window.
-        .overlay {
-            if showAppMenu || showActions {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: closeMenus)
-            }
-        }
-        .overlay(alignment: .bottomLeading) {
-            if showAppMenu {
-                let content = appMenuContent
-                PopoverMenu(
-                    header: content.header, items: content.items, selection: $menuSelection,
-                    onActivate: activateMenuItem
-                )
-                .padding(Self.menuInset)
-                .transition(Self.menuTransition(.bottomLeading))
-            }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if showActions, let content = actionsContent {
-                PopoverMenu(
-                    header: content.header, items: content.items, selection: $menuSelection,
-                    onActivate: activateMenuItem
-                )
-                .padding(Self.menuInset)
-                .transition(Self.menuTransition(.bottomTrailing))
-            }
-        }
-        // The window's own frame (driven by `PaletteWindowController`) is the size source of truth; filling it keeps the glass background and corner clip matched to the current compact/expanded window height.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.black.opacity(Theme.Colors.panelDimming))
-        .background(VisualEffectView())
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        // Every show bumps focusToken — refocus search and drop any menu left open from last time (e.g. dismissed by clicking away with a context menu up).
-        .onChange(of: vm.focusToken) {
-            searchFocused = true
-            showActions = false
-            showAppMenu = false
-        }
-        .onChange(of: vm.query) {
-            vm.selection = 0
-            scrollToken = UUID()
-            emojiScroll = EmojiScrollIntent(kind: .top)
-        }
-        .onChange(of: vm.mode) {
-            vm.selection = 0
-            showActions = false
-            scrollToken = UUID()
-            emojiScroll = EmojiScrollIntent(kind: .top)
-        }
-        // Pop-to-root: `prepare` clears query/selection, but if both were already at their defaults the handlers above never fire — this token guarantees the scroll itself snaps back to the top.
-        .onChange(of: vm.resetToken) {
-            scrollToken = UUID()
-            emojiScroll = EmojiScrollIntent(kind: .top)
-        }
-        // Opening either menu highlights its first row and closes the other, so exactly one menu is ever open and always has a highlight.
-        .onChange(of: showActions) {
-            if showActions {
-                showAppMenu = false
-                menuSelection = 0
-            }
-            vm.menuOpen = menuOpen
-        }
-        .onChange(of: showAppMenu) {
-            if showAppMenu {
-                showActions = false
-                menuSelection = 0
-            }
-            vm.menuOpen = menuOpen
-        }
-        // Follow a row the store moved: a fresh capture (or promote-on-paste) lands at the head of its section, and pinning lifts a row into the Pinned section. With a query typed the highlight stays put; `AppCore` has already placed it for pin/paste.
-        .onChange(of: clipFollow) { old, new in
-            // A nil `old.id` is the first load landing, not a row that moved.
-            guard vm.mode == .clipboard, old.id != nil else { return }
-            if isQueryEmpty, old.id != new.id, let id = new.id,
-                let index = clips.firstIndex(where: { $0.id == id })
-            {
-                vm.selection = index
-            }
-            scrollToken = UUID()
-        }
-        .onAppear { searchFocused = true }
-        // Typing/clearing/overflow/settings all flip `paletteIsCollapsed`; resize the window to match.
-        .onChange(of: core.paletteIsCollapsed) { core.syncPaletteSize() }
-        // ⌘1–⌘5 launch the compact bar's favorite slots (or expand, for the "…" overflow slot).
-        .onKeyPress(keys: ["1", "2", "3", "4", "5"], phases: .down) { press in
-            guard isCollapsed, settings.showFavoritesInCompactMode,
-                press.modifiers.contains(.command),
-                let digit = press.key.character.wholeNumberValue
-            else { return .ignored }
-            let slots = compactFavoriteSlots
-            let index = digit - 1
-            guard slots.indices.contains(index) else { return .ignored }
-            switch slots[index] {
-            case .app(let app): core.launch(app)
-            case .more: core.expandFromCompact()
-            }
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            if isCollapsed { return .ignored }
-            if menuOpen {
-                moveMenu(1)
-                return .handled
-            }
-            if vm.mode == .emoji { moveEmojiRow(1) } else { move(1) }
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            if isCollapsed { return .ignored }
-            if menuOpen {
-                moveMenu(-1)
-                return .handled
-            }
-            if vm.mode == .emoji { moveEmojiRow(-1) } else { move(-1) }
-            return .handled
-        }
-        // Horizontal arrows step the emoji grid; everywhere else they stay with the field editor's caret. An open menu swallows them so the list behind never moves.
-        .onKeyPress(.leftArrow) {
-            if menuOpen { return .handled }
-            guard vm.mode == .emoji else { return .ignored }
-            move(-1)
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            if menuOpen { return .handled }
-            guard vm.mode == .emoji else { return .ignored }
-            move(1)
-            return .handled
-        }
-        // With a menu open, plain ↵ activates its highlighted row. A modified ↵ always runs the selection's own action regardless of menu state: ⌘↵ the secondary copy action (each menu advertises it), ⌥↵ paste-in-place; plain ↵ (no menu) falls through to the field's onSubmit.
-        .onKeyPress(keys: [.return], phases: .down) { press in
-            let command = press.modifiers.contains(.command)
-            let option = press.modifiers.contains(.option)
-            if menuOpen, !command, !option {
-                activateMenuItem(menuSelection)
-                return .handled
-            }
-            guard command || option else { return .ignored }
-            switch vm.mode {
-            case .emoji:
-                guard emojiResults.indices.contains(selection) else { return .ignored }
-                if command {
-                    core.copyEmoji(emojiResults[selection])
-                } else {
-                    core.pasteEmojiKeepingWindowOpen(emojiResults[selection])
+        let base = AnyView(
+            paletteBody(
+                apps: apps,
+                clips: clips,
+                hist: hist,
+                emojiSections: emojiSections,
+                calc: calc,
+                selection: sel,
+                favoriteCount: favoriteCount,
+                showSections: showSections
+            )
+        )
+        let surfaced = AnyView(
+            base
+                .safeAreaInset(edge: .top, spacing: 0) { header }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if !isCollapsed {
+                        bottomBar(pillLabel: pillLabel, showActionGroup: showActionGroup)
+                    }
                 }
-            case .clipboard:
-                guard command, clipResults.indices.contains(selection) else { return .ignored }
-                core.copyToClipboard(clipResults[selection])
-            case .calculatorHistory:
-                // The inline calc card (index 0 when present) has no secondary action; only stored entries respond.
-                let index = selection - calcCount
-                guard command, histResults.indices.contains(index) else { return .ignored }
-                core.copyHistoryExpression(histResults[index])
-            case .launcher:
-                // ⌘↵ quits the selected app when it's running (the Actions menu advertises it); nothing else in the launcher takes a modified ↵. The condition mirrors the menu row's exactly, so the key never swallows a press it won't act on.
-                guard command, let app = selectedAppEntry, app.kind == .application,
-                    core.runningApps.isRunning(app)
-                else { return .ignored }
-                core.quit(app)
+                // Menus are in-window overlays anchored to a bottom corner, so they stay clipped inside the panel — never a system popover spilling outside the window.
+                .overlay {
+                    if showAppMenu || showActions {
+                        Color.black.opacity(0.001)
+                            .contentShape(Rectangle())
+                            .onTapGesture(perform: closeMenus)
+                    }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if showAppMenu {
+                        let content = appMenuContent
+                        PopoverMenu(
+                            header: content.header, items: content.items, selection: $menuSelection,
+                            onActivate: activateMenuItem
+                        )
+                        .padding(Self.menuInset)
+                        .transition(Self.menuTransition(.bottomLeading))
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if showActions, let content = actionsContent {
+                        PopoverMenu(
+                            header: content.header, items: content.items, selection: $menuSelection,
+                            onActivate: activateMenuItem
+                        )
+                        .padding(Self.menuInset)
+                        .transition(Self.menuTransition(.bottomTrailing))
+                    }
+                }
+                // The window's own frame (driven by `PaletteWindowController`) is the size source of truth; filling it keeps the glass background and corner clip matched to the current compact/expanded window height.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Color.black.opacity(Theme.Colors.panelDimming))
+                .background(VisualEffectView())
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        )
+
+        let stateful = AnyView(applyStateHandlers(to: surfaced, clipFollow: clipFollow, clips: clips))
+        let lifecycle = AnyView(applyLifecycleHandlers(to: stateful))
+        return applyKeyHandlers(to: lifecycle)
+    }
+
+    private func applyStateHandlers(
+        to view: AnyView,
+        clipFollow: ClipFollowKey,
+        clips: [ClipboardItem]
+    ) -> some View {
+        view
+            // Every show bumps focusToken — refocus search and drop any menu left open from last time (e.g. dismissed by clicking away with a context menu up).
+            .onChange(of: vm.focusToken) {
+                searchFocused = true
+                showActions = false
+                showAppMenu = false
             }
-            return .handled
-        }
-        .onKeyPress(.escape) {
-            if showActions || showAppMenu {
-                closeMenus()
+            .onChange(of: vm.query) {
+                vm.selection = 0
+                scrollToken = UUID()
+                emojiScroll = EmojiScrollIntent(kind: .top)
+            }
+            .onChange(of: vm.mode) {
+                vm.selection = 0
+                showActions = false
+                scrollToken = UUID()
+                emojiScroll = EmojiScrollIntent(kind: .top)
+            }
+            // Pop-to-root: `prepare` clears query/selection, but if both were already at their defaults the handlers above never fire — this token guarantees the scroll itself snaps back to the top.
+            .onChange(of: vm.resetToken) {
+                scrollToken = UUID()
+                emojiScroll = EmojiScrollIntent(kind: .top)
+            }
+            // Opening either menu highlights its first row and closes the other, so exactly one menu is ever open and always has a highlight.
+            .onChange(of: showActions) {
+                if showActions {
+                    showAppMenu = false
+                    menuSelection = 0
+                }
+                vm.menuOpen = menuOpen
+            }
+            .onChange(of: showAppMenu) {
+                if showAppMenu {
+                    showActions = false
+                    menuSelection = 0
+                }
+                vm.menuOpen = menuOpen
+            }
+            // Follow a row the store moved: a fresh capture (or promote-on-paste) lands at the head of its section, and pinning lifts a row into the Pinned section. With a query typed the highlight stays put; `AppCore` has already placed it for pin/paste.
+            .onChange(of: clipFollow) { old, new in
+                // A nil `old.id` is the first load landing, not a row that moved.
+                guard vm.mode == .clipboard, old.id != nil else { return }
+                if isQueryEmpty, old.id != new.id, let id = new.id,
+                    let index = clips.firstIndex(where: { $0.id == id })
+                {
+                    vm.selection = index
+                }
+                scrollToken = UUID()
+            }
+    }
+
+    private func applyLifecycleHandlers(to view: AnyView) -> some View {
+        view
+            .onAppear { searchFocused = true }
+            // Typing/clearing/overflow/settings all flip `paletteIsCollapsed`; resize the window to match.
+            .onChange(of: core.paletteIsCollapsed) { core.syncPaletteSize() }
+    }
+
+    private func applyKeyHandlers(to view: AnyView) -> some View {
+        let navigation = AnyView(applyNavigationKeyHandlers(to: view))
+        let actions = AnyView(applyActionKeyHandlers(to: navigation))
+        return applyCommandKeyHandlers(to: actions)
+    }
+
+    private func applyNavigationKeyHandlers(to view: AnyView) -> some View {
+        view
+            // ⌘1–⌘5 launch the compact bar's favorite slots (or expand, for the "…" overflow slot).
+            .onKeyPress(keys: ["1", "2", "3", "4", "5"], phases: .down) { press in
+                guard isCollapsed, settings.showFavoritesInCompactMode,
+                    press.modifiers.contains(.command),
+                    let digit = press.key.character.wholeNumberValue
+                else { return .ignored }
+                let slots = compactFavoriteSlots
+                let index = digit - 1
+                guard slots.indices.contains(index) else { return .ignored }
+                switch slots[index] {
+                case .app(let app): core.launch(app)
+                case .more: core.expandFromCompact()
+                }
                 return .handled
             }
-            core.hidePalette()
-            return .handled
-        }
-        .onKeyPress(.tab) {
-            if menuOpen { return .handled }
-            toggleMode()
-            return .handled
-        }
-        .onKeyPress(keys: [","], phases: .down) { press in
-            guard press.modifiers.contains(.command) else { return .ignored }
-            core.showSettings()
-            return .handled
-        }
-        // ⌘K toggles the actions panel for the current selection.
-        .onKeyPress(keys: ["k"], phases: .down) { press in
-            guard press.modifiers.contains(.command) else { return .ignored }
-            // The Actions menu has no anchor in the compact bar (no bottom bar); swallow ⌘K there.
-            guard !isCollapsed else { return .handled }
-            guard resultCount > 0 else { return .handled }
-            // An error calc card is the selection but has no actions — don't open an empty panel.
-            if calcCount > 0, selection == 0, calcResult?.isActionable != true { return .handled }
-            toggleActions()
-            return .handled
-        }
-        // Bare backspace (back out of a sub-screen when the search is empty) is intercepted by PalettePanel.sendEvent — the field editor consumes it before onKeyPress could fire.
-        .onKeyPress(keys: [.delete, .deleteForward], phases: .down) { press in
-            if menuOpen { return .handled }
-            guard press.modifiers.contains(.command) else { return .ignored }
-            switch vm.mode {
-            case .clipboard:
-                deleteSelectedClip()
-            case .calculatorHistory:
-                deleteSelectedHistoryEntry()
-            case .launcher, .emoji:
-                return .ignored
+            .onKeyPress(.downArrow) {
+                if isCollapsed { return .ignored }
+                if menuOpen {
+                    moveMenu(1)
+                    return .handled
+                }
+                if vm.mode == .emoji { moveEmojiRow(1) } else { move(1) }
+                return .handled
             }
-            return .handled
-        }
-        // ⌘P pins/unpins the selected clip — mirrors the Actions menu row, and works while that menu is open like the other advertised chords.
-        .onKeyPress(keys: ["p"], phases: .down) { press in
-            guard press.modifiers.contains(.command), vm.mode == .clipboard,
-                clipResults.indices.contains(selection)
-            else { return .ignored }
-            core.togglePinnedClip(clipResults[selection])
-            return .handled
+            .onKeyPress(.upArrow) {
+                if isCollapsed { return .ignored }
+                if menuOpen {
+                    moveMenu(-1)
+                    return .handled
+                }
+                if vm.mode == .emoji { moveEmojiRow(-1) } else { move(-1) }
+                return .handled
+            }
+            // Horizontal arrows step the emoji grid; everywhere else they stay with the field editor's caret. An open menu swallows them so the list behind never moves.
+            .onKeyPress(.leftArrow) {
+                if menuOpen { return .handled }
+                guard vm.mode == .emoji else { return .ignored }
+                move(-1)
+                return .handled
+            }
+            .onKeyPress(.rightArrow) {
+                if menuOpen { return .handled }
+                guard vm.mode == .emoji else { return .ignored }
+                move(1)
+                return .handled
+            }
+    }
+
+    private func applyActionKeyHandlers(to view: AnyView) -> some View {
+        view
+            // With a menu open, plain ↵ activates its highlighted row. A modified ↵ always runs the selection's own action regardless of menu state: ⌘↵ the secondary copy action (each menu advertises it), ⌥↵ paste-in-place; plain ↵ (no menu) falls through to the field's onSubmit.
+            .onKeyPress(keys: [.return], phases: .down) { press in
+                let command = press.modifiers.contains(.command)
+                let option = press.modifiers.contains(.option)
+                if menuOpen, !command, !option {
+                    activateMenuItem(menuSelection)
+                    return .handled
+                }
+                guard command || option else { return .ignored }
+                switch vm.mode {
+                case .emoji:
+                    guard emojiResults.indices.contains(selection) else { return .ignored }
+                    if command {
+                        core.copyEmoji(emojiResults[selection])
+                    } else {
+                        core.pasteEmojiKeepingWindowOpen(emojiResults[selection])
+                    }
+                case .clipboard:
+                    guard command, clipResults.indices.contains(selection) else { return .ignored }
+                    core.copyToClipboard(clipResults[selection])
+                case .calculatorHistory:
+                    let index = selection - calcCount
+                    guard command, histResults.indices.contains(index) else { return .ignored }
+                    core.copyHistoryExpression(histResults[index])
+                case .launcher:
+                    guard command, let app = selectedAppEntry, app.kind == .application,
+                        core.runningApps.isRunning(app)
+                    else { return .ignored }
+                    core.quit(app)
+                }
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                if showActions || showAppMenu {
+                    closeMenus()
+                    return .handled
+                }
+                core.hidePalette()
+                return .handled
+            }
+    }
+
+    private func applyCommandKeyHandlers(to view: AnyView) -> some View {
+        view
+            .onKeyPress(.tab) {
+                if menuOpen { return .handled }
+                toggleMode()
+                return .handled
+            }
+            .onKeyPress(keys: [","], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                core.showSettings()
+                return .handled
+            }
+            // ⌘K toggles the actions panel for the current selection.
+            .onKeyPress(keys: ["k"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                guard !isCollapsed else { return .handled }
+                guard resultCount > 0 else { return .handled }
+                if calcCount > 0, selection == 0, calcResult?.isActionable != true { return .handled }
+                toggleActions()
+                return .handled
+            }
+            // Bare backspace (back out of a sub-screen when the search is empty) is intercepted by PalettePanel.sendEvent — the field editor consumes it before onKeyPress could fire.
+            .onKeyPress(keys: [.delete, .deleteForward], phases: .down) { press in
+                if menuOpen { return .handled }
+                guard press.modifiers.contains(.command) else { return .ignored }
+                switch vm.mode {
+                case .clipboard:
+                    deleteSelectedClip()
+                case .calculatorHistory:
+                    deleteSelectedHistoryEntry()
+                case .launcher, .emoji:
+                    return .ignored
+                }
+                return .handled
+            }
+            // ⌘P pins/unpins the selected clip — mirrors the Actions menu row, and works while that menu is open like the other advertised chords.
+            .onKeyPress(keys: ["p"], phases: .down) { press in
+                guard press.modifiers.contains(.command), vm.mode == .clipboard,
+                    clipResults.indices.contains(selection)
+                else { return .ignored }
+                core.togglePinnedClip(clipResults[selection])
+                return .handled
+            }
+    }
+
+    @ViewBuilder
+    private func paletteBody(
+        apps: [AppEntry],
+        clips: [ClipboardItem],
+        hist: [CalcHistoryEntry],
+        emojiSections: [EmojiGridSection],
+        calc: CalcResult?,
+        selection: Int,
+        favoriteCount: Int,
+        showSections: Bool
+    ) -> some View {
+        if isCollapsed {
+            Color.clear
+        } else {
+            content(
+                apps: apps,
+                clips: clips,
+                hist: hist,
+                emojiSections: emojiSections,
+                calc: calc,
+                selection: selection,
+                favoriteCount: favoriteCount,
+                showSections: showSections
+            )
         }
     }
 

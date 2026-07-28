@@ -4,8 +4,8 @@ How to build, test, package, and release Tinycast.
 
 ## Requirements
 
-- macOS 26 or later (Liquid Glass).
-- Xcode 26 installed — it provides the SwiftUI macro plugin and SDK used to build.
+- macOS 15 or later.
+- Xcode 16 installed — it provides the SwiftUI macro plugin and SDK used to build.
 
 ## First-time setup
 
@@ -120,10 +120,11 @@ below and [`.github/workflows/release.yml`](../.github/workflows/release.yml).
 
 ## Signing & Gatekeeper
 
-Both local builds and CI releases sign with the same stable `Tinycast Self-Signed` identity (not an
-Apple Developer ID), so macOS quarantines a directly-downloaded DMG — the Homebrew cask strips that
-automatically, and direct downloaders run `xattr -dr com.apple.quarantine "…/Tinycast.app"` once.
-Full details in [signing.md](signing.md).
+Local builds sign with the stable `Tinycast Self-Signed` identity (not an Apple Developer ID), so
+Accessibility survives rebuilds. CI releases are currently packaged unsigned; either way, macOS
+quarantines a directly-downloaded DMG, the Homebrew cask strips that automatically, and direct
+downloaders run `xattr -dr com.apple.quarantine "…/Tinycast.app"` once. Full details in
+[signing.md](signing.md).
 
 ## CI releases
 
@@ -137,7 +138,7 @@ needed. Run it from the **Actions** tab (`Release` → **Run workflow**) and pic
   so re-running never collides; stable ships the version as-is.
 - **version** — base semver, e.g. `0.2.0`.
 
-It builds on a `macos-26` runner with Xcode 26 and publishes a GitHub Release tagged
+It builds on a `macos-15` runner with Xcode 16 and packages an unsigned app into a DMG, then publishes a GitHub Release tagged
 `v<full-version>` with a versioned DMG asset (`Tinycast-<full-version>.dmg`), marked prerelease
 for beta. On success it also bumps the matching cask in the tap (below).
 
