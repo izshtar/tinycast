@@ -208,6 +208,7 @@ struct RootPaletteView: View {
                 }
             }
         )
+        let panelShape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
         let surfaced = AnyView(
             base
                 // Menus are in-window overlays anchored to a bottom corner, so they stay clipped inside the panel — never a system popover spilling outside the window.
@@ -239,11 +240,32 @@ struct RootPaletteView: View {
                         .transition(Self.menuTransition(.bottomTrailing))
                     }
                 }
-                // The window's own frame (driven by `PaletteWindowController`) is the size source of truth; filling it keeps the glass background and corner clip matched to the current compact/expanded window height.
+                .overlay {
+                    panelShape
+                        .strokeBorder(Theme.Colors.panelBorder, lineWidth: 1)
+                }
+                .overlay(alignment: .top) {
+                    panelShape
+                        .stroke(Theme.Colors.panelHighlight, lineWidth: 1)
+                        .blur(radius: 0.5)
+                        .mask {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white, location: 0),
+                                    .init(color: .white.opacity(0.8), location: 0.18),
+                                    .init(color: .clear, location: 0.48),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                }
+                // The window's own frame (driven by `PaletteWindowController`) is the size source of truth; filling it keeps the surface, border and corner clip matched to the current compact/expanded window height.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(Color.black.opacity(Theme.Colors.panelDimming))
-                .background(VisualEffectView())
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+                .background(Theme.Colors.panelFill)
+                .background(VisualEffectView(material: .hudWindow))
+                .clipShape(panelShape)
         )
 
         let stateful = AnyView(applyStateHandlers(to: surfaced, clipFollow: clipFollow, clips: clips))
@@ -521,10 +543,15 @@ struct RootPaletteView: View {
         }
         // Align the search icon with the list rows and section headers below (list inset + row inset).
         .padding(.horizontal, Theme.Spacing.md * 2)
+        .padding(.bottom, Theme.Spacing.sm)
         // Fixed row height + top padding, identical in both states, so typing (which flips compact→expanded) can't move the search bar. Compact centers the row in symmetric slack; expanded pins the same row above the independent results region.
         .frame(height: Theme.Size.headerHeight)
         .padding(.top, Theme.Size.headerPadding)
+        .padding(.horizontal, Theme.Size.chromeInset)
         .frame(maxWidth: .infinity)
+        .background(alignment: .bottom) {
+            headerChrome
+        }
     }
 
     /// The one search field, kept in a single tree position (the `header`) so its focus survives the compact↔expanded swap.
@@ -536,6 +563,7 @@ struct RootPaletteView: View {
         .textFieldStyle(.plain)
         .font(Theme.Typography.searchField)
         .tint(.white)
+        .padding(.horizontal, Theme.Spacing.sm)
         .focused($searchFocused)
         .onSubmit(activateSelection)
     }
@@ -656,15 +684,36 @@ struct RootPaletteView: View {
     }
 
     private func bottomBar(pillLabel: String, showActionGroup: Bool) -> some View {
-        // No bar — just floating glass controls over the list; the edge dissolve ghosts rows passing beneath, so the buttons read clearly without a hard-edged strip.
         HStack(spacing: 0) {
             appMenuButton
             Spacer()
             if showActionGroup { actionGroup(pillLabel: pillLabel) }
         }
-        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.horizontal, Theme.Spacing.md + Theme.Size.chromeInset)
         .frame(height: Theme.Size.bottomBarHeight)
         .frame(maxWidth: .infinity)
+        .background(alignment: .top) {
+            footerChrome
+        }
+    }
+
+    private var headerChrome: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.panel - 4, style: .continuous)
+            .fill(Theme.Colors.chromeFill)
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.Radius.panel - 4, style: .continuous)
+                    .strokeBorder(Theme.Colors.chromeBorder, lineWidth: 1)
+            }
+            .padding(.horizontal, Theme.Size.chromeInset * 1.5)
+            .padding(.top, Theme.Size.chromeInset * 1.5)
+            .padding(.bottom, Theme.Spacing.xs)
+    }
+
+    private var footerChrome: some View {
+        Rectangle()
+            .fill(Theme.Colors.chromeBorder)
+            .frame(height: 1)
+            .padding(.bottom, Theme.Spacing.md)
     }
 
     private var appMenuButton: some View {

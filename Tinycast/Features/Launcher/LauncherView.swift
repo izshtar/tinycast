@@ -180,7 +180,7 @@ private struct AppRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, Theme.Spacing.md)
-        .padding(.vertical, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xs + Theme.Spacing.xxs)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.row, style: .continuous)
                 .fill(fill)
@@ -207,8 +207,8 @@ struct AppIconView: View {
             if let image {
                 Image(nsImage: image).resizable()
             } else {
-                RoundedRectangle(cornerRadius: Theme.Radius.row, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: Theme.Radius.thumbnail, style: .continuous)
+                    .fill(Theme.Colors.controlSurface)
             }
         }
         .task(id: app.id) {

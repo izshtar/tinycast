@@ -19,14 +19,14 @@ enum Theme {
     }
 
     enum Radius {
-        static let panel: CGFloat = 26
-        static let row: CGFloat = 10
+        static let panel: CGFloat = 16
+        static let row: CGFloat = 8
         static let menu: CGFloat = 6
         /// Hover highlight behind a popover menu row.
         static let menuRow: CGFloat = 10
-        static let menuPanel: CGFloat = 16
-        static let thumbnail: CGFloat = 6
-        static let card: CGFloat = 10
+        static let menuPanel: CGFloat = 14
+        static let thumbnail: CGFloat = 5
+        static let card: CGFloat = 8
         static let keyCap: CGFloat = 6
         /// Settings shortcut-recorder keycap — smaller than the palette's `keyCap` chip.
         static let recorderKeyCap: CGFloat = 4
@@ -45,6 +45,7 @@ enum Theme {
         /// Collapsed compact bar: the search row centered in symmetric `headerPadding` slack.
         static let compactHeight: CGFloat = headerHeight + headerPadding * 2
         static let bottomBarHeight: CGFloat = 52
+        static let chromeInset: CGFloat = 6
         static let rowIcon: CGFloat = 24
         /// Launcher application rows use a larger icon slot than the shared palette-row baseline.
         static let launcherApplicationIcon: CGFloat = 48
@@ -82,11 +83,21 @@ enum Theme {
 
     enum Colors {
         /// Black opacity of the panel's surface tint over the behind-window material.
-        static let panelDimming: CGFloat = 0.4
+        static let panelDimming: CGFloat = 0.58
+        /// A low-contrast dark tint that gives the panel a more solid surface than bare vibrancy.
+        static let panelFill = Color.white.opacity(0.035)
+        /// Hairline border at the panel edge.
+        static let panelBorder = Color.white.opacity(0.14)
+        /// Slight top-edge lift so the palette reads as a single shaped object over the desktop.
+        static let panelHighlight = Color.white.opacity(0.10)
+        /// Header/footer chrome fill — still translucent, but denser than the scrolling content region.
+        static let chromeFill = Color.white.opacity(0.05)
+        /// Chrome border used by the header/footer capsules and bands.
+        static let chromeBorder = Color.white.opacity(0.09)
         /// Selection fill: a soft neutral translucent layer shared by launcher and clipboard so both lists look identical.
-        static let selection = Color.white.opacity(0.10)
+        static let selection = Color.white.opacity(0.13)
         /// Mouse hover — a fainter layer that follows the cursor, visually distinct from selection.
-        static let rowHover = Color.white.opacity(0.05)
+        static let rowHover = Color.white.opacity(0.07)
         static let menuHover = Color.white.opacity(0.10)
         static let separator = Color.white.opacity(0.10)
         /// Small control surfaces: kbd chips, glyph tiles.
@@ -96,10 +107,10 @@ enum Theme {
         static let textSecondary = Color.white.opacity(0.60)
         static let textTertiary = Color.white.opacity(0.40)
         /// Settings grouped "card": a faint raised surface whose hairline border doubles as the inset row divider.
-        static let cardFill = Color.white.opacity(0.05)
-        static let cardStroke = Color.white.opacity(0.10)
+        static let cardFill = Color.white.opacity(0.07)
+        static let cardStroke = Color.white.opacity(0.12)
         /// Whitish tint layered into the Liquid Glass floating controls (action group + menu circle) so the glass reads frosted rather than clear.
-        static let glassFrost = Color.white.opacity(0.05)
+        static let glassFrost = Color.white.opacity(0.025)
         /// The violet of the app mark. The one non-white hue in the system, used only to tint the About support callout.
         static let brand = Color(red: 0.525, green: 0.231, blue: 1.0)
     }
@@ -155,14 +166,14 @@ private struct FrostedSurface<S: Shape>: ViewModifier {
         content
             .background {
                 ZStack {
-                    shape.fill(.clear)
+                    shape.fill(Theme.Colors.chromeFill)
                     VisualEffectView(material: interactive ? .hudWindow : .popover)
                         .clipShape(shape)
                     shape.fill(Theme.Colors.glassFrost)
                 }
             }
             .overlay {
-                shape.stroke(Theme.Colors.border.opacity(0.55), lineWidth: 1)
+                shape.stroke(Theme.Colors.chromeBorder, lineWidth: 1)
             }
     }
 }
