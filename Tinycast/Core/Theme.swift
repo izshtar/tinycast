@@ -45,8 +45,6 @@ enum Theme {
         /// Collapsed compact bar: the search row centered in symmetric `headerPadding` slack.
         static let compactHeight: CGFloat = headerHeight + headerPadding * 2
         static let bottomBarHeight: CGFloat = 52
-        /// Extra room at the bottom of expanded result views so the floating footer never obscures the last row or grid line.
-        static let paletteBottomInset: CGFloat = bottomBarHeight + Theme.Spacing.md
         static let rowIcon: CGFloat = 24
         /// Launcher application rows use a larger icon slot than the shared palette-row baseline.
         static let launcherApplicationIcon: CGFloat = 48

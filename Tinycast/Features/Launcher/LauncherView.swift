@@ -89,7 +89,7 @@ struct LauncherList: View {
                         }
                         .padding(.horizontal, Theme.Spacing.md)
                         .padding(.top, Theme.Spacing.xs)
-                        .padding(.bottom, Theme.Size.paletteBottomInset)
+                        .padding(.bottom, Theme.Spacing.md)
                         .hideNativeScrollers()
                     }
                     .edgeDissolve()

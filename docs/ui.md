@@ -34,7 +34,7 @@ These are the things that quietly break the look if changed. Preserve them unles
 
 - **Forced dark.** `AppCore.start()` sets `NSApp.appearance = .darkAqua`. All colors are literal white/black alphas, not adaptive `Color`s. Don't introduce semantic/adaptive colors or a light variant.
 - **No grays, no opaque fills on the surface.** Reach for `Theme.Colors.*` (white-alpha) instead of `.gray`, `NSColor.windowBackground`, etc.
-- **No hard dividers between the list and the bars.** The header and bottom bar are `safeAreaInset` overlays with no background; separation comes from `edgeDissolve()`, nothing else. (One deliberate exception: the vertical hairline between the clipboard list and its preview pane.)
+- **No hard dividers between the list and the bars.** The header and bottom bar are fixed siblings of the results region with no background; separation comes from spacing and `edgeDissolve()`, nothing else. (One deliberate exception: the vertical hairline between the clipboard list and its preview pane.)
 - **The panel corner is clipped once, at the root.** `RootPaletteView.body` ends with `.background(black 40%) → .background(VisualEffectView()) → .clipShape(RoundedRectangle(26, .continuous))`. Keep that order; the scrim goes _over_ the vibrancy, and the clip is last.
 - **Don't use the native scroll edge effect.** Inside a transparent panel it renders a hard-bounded rectangle. Use `edgeDissolve()`.
 - **Test over a light desktop.** Transparency and corner masking bugs only show over bright wallpaper. Dark wallpaper hides them.
@@ -105,7 +105,7 @@ the forced-dark environment). **Selection always beats hover** when a row is bot
 ## Panel structure — `Core/PalettePanel.swift`, `Features/RootPaletteView.swift`
 
 - **`PalettePanel`** is a borderless `NSPanel`: `isOpaque = false`, `backgroundColor = .clear`, `.floating` level, `hasShadow`, `animationBehavior = .none`. It hosts SwiftUI via `NSHostingView`. `PaletteWindowController` centers it slightly above screen center (`+8%`) and dismisses it on `windowDidResignKey`.
-- **The results layer fills the whole panel.** The header and bottom bar attach via `.safeAreaInset(edge: .top/.bottom)` as transparent overlays that float _over_ the list. The list underlaps them and dissolves at the edges.
+- **The panel is a three-part stack.** `RootPaletteView` pins the header at the top, the active results view in the middle, and the footer at the bottom. The list scrolls only inside that middle region; it no longer extends beneath the header or footer.
 - **Header** (`headerHeight 44`): a back-chevron _or_ mode glyph, then the plain `TextField` (no border/background). Sub-screens (Clipboard, Calculator History) show the back chevron; the launcher shows a magnifying glass. The search icon aligns horizontally with row content.
 - **Bottom bar** (`bottomBarHeight 52`): a menu circle on the left, the action group on the right — both floating glass, no bar background. The action group is one glass `Capsule` holding the primary-action pill (label + `↵`) and the Actions toggle (`⌘K`).
 
@@ -114,13 +114,13 @@ the forced-dark environment). **Selection always beats hover** when a row is bot
 ## The edge dissolve — `Core/EdgeDissolve.swift`
 
 The signature effect. A scroll-driven `LinearGradient` mask on each list so rows soften as they approach
-a floating bar, ghost beneath it, and vanish only at the window edge. Attach with `.edgeDissolve()` on
+the results region edges rather than clipping abruptly. Attach with `.edgeDissolve()` on
 the `ScrollView`, **before `.thinScrollbar()`** (so the scrollbar overlay stays unmasked).
 
-- Fade bands: top = `headerHeight + headerPadding + 32`, bottom = `bottomBarHeight + 28` — each overshoots its bar into the visible list, so the ramp finishes ~32/28px _past_ the bar rather than cliffing at its edge.
+- Fade bands: top = `headerHeight + headerPadding + 32`, bottom = `bottomBarHeight + 28` — tuned to keep the first and last visible rows from cliffing against the fixed header/footer boundaries.
 - Alpha floors mid-scroll (not to 0): **top 0.15, bottom 0.25**, eased by how much content is hidden past the edge (`1 − (1 − floor)·clamp(dist/band, 0, 1)`).
 - Only masks when the list is scrollable; the edge stop stays transparent so rubber-band bounces still dissolve. A list that fits gets no mask.
-- The mask spans the scroll view's **full** frame (`.ignoresSafeArea()`) — otherwise the bars' safe-area insets shift the gradient onto at-rest rows.
+- The mask spans the scroll view's **full** frame (`.ignoresSafeArea()`) so the fade stays pinned to the results region bounds rather than the content stack inside it.
 
 ---
 

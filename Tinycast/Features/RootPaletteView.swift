@@ -184,27 +184,32 @@ struct RootPaletteView: View {
         let pillLabel = actionPillLabel(selectedApp: selectedApp, calcActionable: calcActionable)
         let showActionGroup = count > 0 && !(calcSelected && !calcActionable)
 
-        // The `header` (and its single search field) is always attached in the same position via safeAreaInset so its focus survives the compact↔expanded swap — only the results below it toggle. Collapsed shows the bar alone; expanded floats header + action bar over the list with edge-dissolve (see docs/ui.md).
+        // The `header` (and its single search field) stays in one tree position so focus survives the compact↔expanded swap. Expanded mode is a three-part stack: fixed header, independent results region, fixed footer.
         let base = AnyView(
-            paletteBody(
-                apps: apps,
-                clips: clips,
-                hist: hist,
-                emojiSections: emojiSections,
-                calc: calc,
-                selection: sel,
-                favoriteCount: favoriteCount,
-                showSections: showSections
-            )
-        )
-        let surfaced = AnyView(
-            base
-                .safeAreaInset(edge: .top, spacing: 0) { header }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !isCollapsed {
+            Group {
+                if isCollapsed {
+                    header
+                } else {
+                    VStack(spacing: 0) {
+                        header
+                        paletteBody(
+                            apps: apps,
+                            clips: clips,
+                            hist: hist,
+                            emojiSections: emojiSections,
+                            calc: calc,
+                            selection: sel,
+                            favoriteCount: favoriteCount,
+                            showSections: showSections
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         bottomBar(pillLabel: pillLabel, showActionGroup: showActionGroup)
                     }
                 }
+            }
+        )
+        let surfaced = AnyView(
+            base
                 // Menus are in-window overlays anchored to a bottom corner, so they stay clipped inside the panel — never a system popover spilling outside the window.
                 .overlay {
                     if showAppMenu || showActions {
@@ -516,7 +521,7 @@ struct RootPaletteView: View {
         }
         // Align the search icon with the list rows and section headers below (list inset + row inset).
         .padding(.horizontal, Theme.Spacing.md * 2)
-        // Fixed row height + top padding, identical in both states, so typing (which flips compact→expanded) can't move the search bar. Compact centers the row in symmetric slack; expanded floats the same row over the list.
+        // Fixed row height + top padding, identical in both states, so typing (which flips compact→expanded) can't move the search bar. Compact centers the row in symmetric slack; expanded pins the same row above the independent results region.
         .frame(height: Theme.Size.headerHeight)
         .padding(.top, Theme.Size.headerPadding)
         .frame(maxWidth: .infinity)
