@@ -134,7 +134,7 @@ struct EmojiGridView: View {
                 }
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.top, Theme.Spacing.xs)
-                .padding(.bottom, Theme.Spacing.md)
+                .padding(.bottom, Theme.Size.paletteBottomInset)
                 .hideNativeScrollers()
             }
             .edgeDissolve()

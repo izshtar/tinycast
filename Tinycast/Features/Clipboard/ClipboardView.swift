@@ -66,7 +66,7 @@ struct ClipboardList: View {
                 }
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.top, Theme.Spacing.xs)
-                .padding(.bottom, Theme.Spacing.md)
+                .padding(.bottom, Theme.Size.paletteBottomInset)
                 .hideNativeScrollers()
             }
             .edgeDissolve()
@@ -75,7 +75,6 @@ struct ClipboardList: View {
                 if let selectedID { proxy.scrollTo(selectedID.uuidString) }
             }
         }
-        .padding(.top, Theme.Size.paletteListTopInset)
     }
 }
 

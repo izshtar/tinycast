@@ -61,7 +61,6 @@ struct LauncherList: View {
         return Group {
             if results.isEmpty && calc == nil {
                 EmptyResults(text: "No apps found")
-                    .padding(.top, Theme.Size.paletteListTopInset)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -90,7 +89,7 @@ struct LauncherList: View {
                         }
                         .padding(.horizontal, Theme.Spacing.md)
                         .padding(.top, Theme.Spacing.xs)
-                        .padding(.bottom, Theme.Spacing.md)
+                        .padding(.bottom, Theme.Size.paletteBottomInset)
                         .hideNativeScrollers()
                     }
                     .edgeDissolve()
@@ -103,7 +102,6 @@ struct LauncherList: View {
                         }
                     }
                 }
-                .padding(.top, Theme.Size.paletteListTopInset)
             }
         }
     }
