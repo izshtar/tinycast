@@ -42,6 +42,8 @@ enum Theme {
         static let headerIconSlot: CGFloat = 22
         /// Vertical breathing room above the search row — constant across compact/expanded so the bar never shifts when typing flips the state; also the compact bar's symmetric top/bottom slack.
         static let headerPadding: CGFloat = 10
+        /// Expanded palette lists start below the floating search row instead of scrolling beneath it.
+        static let paletteListTopInset: CGFloat = headerHeight + headerPadding
         /// Collapsed compact bar: the search row centered in symmetric `headerPadding` slack.
         static let compactHeight: CGFloat = headerHeight + headerPadding * 2
         static let bottomBarHeight: CGFloat = 52

@@ -84,12 +84,13 @@ struct CalculatorHistoryList: View {
             .thinScrollbar()
             .onChange(of: scrollToken) {
                 if calcSelected {
-                    proxy.scrollTo(Self.calcRowID, anchor: .center)
+                    proxy.scrollTo(Self.calcRowID)
                 } else if let selectedID {
-                    proxy.scrollTo(selectedID.uuidString, anchor: .center)
+                    proxy.scrollTo(selectedID.uuidString)
                 }
             }
         }
+        .padding(.top, Theme.Size.paletteListTopInset)
     }
 }
 

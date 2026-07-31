@@ -61,6 +61,7 @@ struct LauncherList: View {
         return Group {
             if results.isEmpty && calc == nil {
                 EmptyResults(text: "No apps found")
+                    .padding(.top, Theme.Size.paletteListTopInset)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -96,12 +97,13 @@ struct LauncherList: View {
                     .thinScrollbar()
                     .onChange(of: scrollToken) {
                         if calcSelected {
-                            proxy.scrollTo(Self.calcRowID, anchor: .center)
+                            proxy.scrollTo(Self.calcRowID)
                         } else if let selectedID {
-                            proxy.scrollTo(selectedID, anchor: .center)
+                            proxy.scrollTo(selectedID)
                         }
                     }
                 }
+                .padding(.top, Theme.Size.paletteListTopInset)
             }
         }
     }

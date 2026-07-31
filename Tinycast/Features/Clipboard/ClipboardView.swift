@@ -72,9 +72,10 @@ struct ClipboardList: View {
             .edgeDissolve()
             .thinScrollbar()
             .onChange(of: scrollToken) {
-                if let selectedID { proxy.scrollTo(selectedID.uuidString, anchor: .center) }
+                if let selectedID { proxy.scrollTo(selectedID.uuidString) }
             }
         }
+        .padding(.top, Theme.Size.paletteListTopInset)
     }
 }
 

@@ -32,12 +32,13 @@ targets:
     platform: macOS
     sources:
       - path: Tinycast
+    resources:
+      - path: tinycast.icns
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tinycast.app
         INFOPLIST_FILE: Tinycast/Info.plist
         CODE_SIGN_ENTITLEMENTS: Tinycast/Tinycast.entitlements
-        ASSETCATALOG_COMPILER_APPICON_NAME: tinycast
         COMBINE_HIDPI_IMAGES: YES
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
