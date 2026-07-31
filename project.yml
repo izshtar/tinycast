@@ -33,7 +33,7 @@ targets:
     sources:
       - path: Tinycast
     resources:
-      - path: tinycast.icns
+      - path: Tinycast/tinycast.icns
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tinycast.app

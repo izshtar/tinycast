@@ -19,7 +19,7 @@
 		32697AB3853D043A12888B96 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31E3ACB6D2C26ECA485C3DB /* Permissions.swift */; };
 		344D89B83B57C1DD1E7C0BFC /* EmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641A8B9F099ED1521F14D81E /* EmojiCatalog.swift */; };
 		34E5FF0B3C9FD2FFE504D87A /* ClipboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52ADC36002F1A5B04D61B4D3 /* ClipboardView.swift */; };
-		36784C964DB27B94A62EEAA3 /* tinycast.icon in Resources */ = {isa = PBXBuildFile; fileRef = 6621A88681E993D49EEF07A3 /* tinycast.icon */; };
+		36784C964DB27B94A62EEAA3 /* tinycast.icns in Resources */ = {isa = PBXBuildFile; fileRef = 6621A88681E993D49EEF07A3 /* tinycast.icns */; };
 		374235D358A127741447551E /* SettingsBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5043CD44B4B40C49BE79852A /* SettingsBackup.swift */; };
 		42828BD1C5E4E6E7AA1BF103 /* CalculatorHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F793A92DD4DC73CF1D87F3FD /* CalculatorHistoryStore.swift */; };
 		441CF705AE1D03F6E236A61E /* ClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC43CFF6777C11BB880F398 /* ClipboardStore.swift */; };
@@ -119,8 +119,8 @@
 		5D57B0AE44D21035163BD422 /* CommandRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRegistry.swift; sourceTree = "<group>"; };
 		5E08668A3C8418E2F0970300 /* CurrencyData.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyData.generated.swift; sourceTree = "<group>"; };
 		6185011A02366B30B48B5B6C /* Paster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paster.swift; sourceTree = "<group>"; };
+		6621A88681E993D49EEF07A3 /* tinycast.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = tinycast.icns; sourceTree = "<group>"; };
 		641A8B9F099ED1521F14D81E /* EmojiCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiCatalog.swift; sourceTree = "<group>"; };
-		6621A88681E993D49EEF07A3 /* tinycast.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = tinycast.icon; sourceTree = "<group>"; };
 		68952539C0BD045BA175CBB6 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		68BD5E61831CB92150C62E1F /* CalculatorHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculatorHistoryView.swift; sourceTree = "<group>"; };
 		6BB7C545EFD9589A77AD7BE2 /* LauncherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherView.swift; sourceTree = "<group>"; };
@@ -288,7 +288,7 @@
 				C45190564C9D9F1722E83943 /* Assets.xcassets */,
 				4DA7B926405DAC632C056418 /* Info.plist */,
 				45D4BA6E1BD8EB1F96A8927F /* Tinycast.entitlements */,
-				6621A88681E993D49EEF07A3 /* tinycast.icon */,
+				6621A88681E993D49EEF07A3 /* tinycast.icns */,
 			);
 			path = Tinycast;
 			sourceTree = "<group>";
@@ -439,7 +439,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9969E6858C4FDC5CCCDEB5D8 /* Assets.xcassets in Resources */,
-				36784C964DB27B94A62EEAA3 /* tinycast.icon in Resources */,
+				36784C964DB27B94A62EEAA3 /* tinycast.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -532,7 +532,6 @@
 		0BDFADB1EE48BA5F7B103F30 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = tinycast;
 				CODE_SIGN_ENTITLEMENTS = Tinycast/Tinycast.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Tinycast/Info.plist;
@@ -549,7 +548,6 @@
 		58A6CE2BBFD809933397AE23 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = tinycast;
 				CODE_SIGN_ENTITLEMENTS = Tinycast/Tinycast.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Tinycast/Info.plist;
